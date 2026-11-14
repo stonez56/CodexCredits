@@ -5,6 +5,7 @@
 #include "input_handler.h"
 #include "net_manager.h"
 #include "quota_client.h"
+#include "stock_client.h"
 #include "weather_client.h"
 #include "ui_renderer.h"
 
@@ -12,17 +13,20 @@ DisplayDriver g_display;
 InputHandler  g_input;
 NetManager    g_net;
 QuotaClient   g_quotaClient;
+StockClient   g_stockClient;
 WeatherClient g_weatherClient;
 UiRenderer    g_ui;
 
 RuntimeConfig g_cfg;
 QuotaState    g_quota;
+StockState    g_stocks;
 WeatherState  g_weather;
 
 PageId   g_currentPage      = PageId::OVERVIEW;
 uint32_t g_lastCycleMs      = 0;
 uint32_t g_lastClockMs      = 0;
 uint32_t g_lastQuotaMs      = 0;
+uint32_t g_lastStockMs      = 0;
 uint32_t g_lastWeatherMs    = 0;
 uint32_t g_manualHoldUntil  = 0;
 uint32_t g_nightWakeUntil   = 0;
@@ -34,6 +38,18 @@ namespace {
     struct tm t;
     localtime_r(&nowEpoch, &t);
     return (t.tm_hour >= AppConfig::NIGHT_START_HOUR && t.tm_hour < AppConfig::NIGHT_END_HOUR);
+  }
+
+  bool isMarketOpen(time_t nowEpoch) {
+    if (nowEpoch < 1700000000) return false;
+    struct tm t;
+    localtime_r(&nowEpoch, &t);
+    const int w = t.tm_wday; // 0=Sun .. 6=Sat
+    const int hhmm = t.tm_hour * 100 + t.tm_min;
+    if (w >= 1 && w <= 5 && hhmm >= 855 && hhmm <= 1335) return true;
+    if (w >= 1 && w <= 5 && hhmm >= 2125) return true;
+    if (w >= 2 && w <= 6 && hhmm <= 505) return true;
+    return false;
   }
 
   void renderCurrent(bool forceFull) {
@@ -53,14 +69,18 @@ namespace {
       g_cfg.autoCycleEnabled,
       manualHold,
       &g_quota,
-      &g_weather
+      &g_weather,
+      &g_stocks
     };
     g_ui.render(g_display, ctx, forceFull);
   }
 
-  void syncAllData(bool includeWeather) {
+  void syncAllData(bool includeWeather, bool includeStocks = true) {
     const time_t nowEp = g_net.nowEpoch();
     g_quotaClient.sync(g_cfg.quotaUrl, g_cfg.quotaToken, nowEp, g_quota);
+    if (includeStocks) {
+      g_stockClient.sync(g_cfg.quotaUrl, g_cfg.quotaToken, nowEp, g_stocks);
+    }
     if (includeWeather) {
       const char* cityQ = AppConfig::CITIES[g_cfg.cityIndex % AppConfig::CITY_COUNT].query;
       g_weatherClient.sync(g_cfg.owmApiKey, cityQ, nowEp, g_weather);
@@ -74,6 +94,7 @@ void setup() {
   Serial.println("\n=== CodexCredits CrowPanel 5.79\" Dashboard ===");
 
   memset(&g_quota, 0, sizeof(g_quota));
+  memset(&g_stocks, 0, sizeof(g_stocks));
   memset(&g_weather, 0, sizeof(g_weather));
 
   g_input.begin();
@@ -98,6 +119,7 @@ void setup() {
   g_lastCycleMs   = nowMs;
   g_lastClockMs   = nowMs;
   g_lastQuotaMs   = nowMs;
+  g_lastStockMs   = nowMs;
   g_lastWeatherMs = nowMs;
 
   if (isNightHour(g_net.nowEpoch())) {
@@ -128,13 +150,13 @@ void loop() {
 
     switch (ev) {
       case InputEvent::UP_SHORT:
-        g_currentPage = static_cast<PageId>((static_cast<uint8_t>(g_currentPage) + 3) % 4);
+        g_currentPage = static_cast<PageId>((static_cast<uint8_t>(g_currentPage) + static_cast<uint8_t>(PageId::PAGE_COUNT) - 1) % static_cast<uint8_t>(PageId::PAGE_COUNT));
         g_manualHoldUntil = nowMs + AppConfig::MANUAL_HOLD_SEC * 1000UL;
         needRender = true;
         break;
 
       case InputEvent::DOWN_SHORT:
-        g_currentPage = static_cast<PageId>((static_cast<uint8_t>(g_currentPage) + 1) % 4);
+        g_currentPage = static_cast<PageId>((static_cast<uint8_t>(g_currentPage) + 1) % static_cast<uint8_t>(PageId::PAGE_COUNT));
         g_manualHoldUntil = nowMs + AppConfig::MANUAL_HOLD_SEC * 1000UL;
         needRender = true;
         break;
@@ -212,32 +234,45 @@ void loop() {
 
   // 3. 日間背景資料同步
   bool dataUpdated = false;
+  bool stockUpdated = false;
   if ((nowMs - g_lastQuotaMs) >= AppConfig::QUOTA_SYNC_INTERVAL_MS) {
-    syncAllData(false);
+    syncAllData(false, false);
     g_lastQuotaMs = nowMs;
+    if (g_currentPage != PageId::STOCKS) {
+      dataUpdated = true;
+    }
+  }
+  if (isMarketOpen(g_net.nowEpoch()) && (nowMs - g_lastStockMs) >= 300000UL) {
+    g_stockClient.sync(g_cfg.quotaUrl, g_cfg.quotaToken, g_net.nowEpoch(), g_stocks);
+    g_lastStockMs = nowMs;
+    stockUpdated = true;
     dataUpdated = true;
   }
   if ((nowMs - g_lastWeatherMs) >= AppConfig::WEATHER_SYNC_INTERVAL_MS) {
     const char* cityQ = AppConfig::CITIES[g_cfg.cityIndex % AppConfig::CITY_COUNT].query;
     g_weatherClient.sync(g_cfg.owmApiKey, cityQ, g_net.nowEpoch(), g_weather);
     g_lastWeatherMs = nowMs;
-    dataUpdated = true;
+    if (g_currentPage != PageId::STOCKS || isMarketOpen(g_net.nowEpoch())) {
+      dataUpdated = true;
+    }
   }
 
   // 4. 日間 30 秒自動輪播（無 Manual Hold 時）
   const bool manualHold = (static_cast<int32_t>(g_manualHoldUntil - nowMs) > 0);
   if (g_cfg.autoCycleEnabled && !manualHold && (nowMs - g_lastCycleMs) >= AppConfig::AUTO_CYCLE_SEC * 1000UL) {
-    g_currentPage = static_cast<PageId>((static_cast<uint8_t>(g_currentPage) + 1) % 4);
+    g_currentPage = static_cast<PageId>((static_cast<uint8_t>(g_currentPage) + 1) % static_cast<uint8_t>(PageId::PAGE_COUNT));
     g_lastCycleMs = nowMs;
     g_lastClockMs = nowMs;
-    renderCurrent(dataUpdated);
+    renderCurrent(dataUpdated || stockUpdated);
     return;
   }
 
-  // 5. 每 1 分鐘局部刷新時鐘與倒數
-  if (dataUpdated || (nowMs - g_lastClockMs) >= AppConfig::CLOCK_UPDATE_INTERVAL_MS) {
+  // 5. 每 1 分鐘更新時鐘（若在 Page 5 休市期間則不主動刷屏，節省壽命與視覺干擾）
+  const bool allowMinuteClock =
+      !(g_currentPage == PageId::STOCKS && !isMarketOpen(g_net.nowEpoch()));
+  if (dataUpdated || (allowMinuteClock && (nowMs - g_lastClockMs) >= AppConfig::CLOCK_UPDATE_INTERVAL_MS)) {
     g_lastClockMs = nowMs;
-    renderCurrent(dataUpdated);
+    renderCurrent(dataUpdated || stockUpdated);
   }
 
   delay(20);

@@ -182,8 +182,10 @@ void UiRenderer::drawTopBar(DisplayDriver& display, const UiContext& ctx) {
   const char* langTag = (ctx.lang == LangMode::ZH_TW) ? "ZH" : "EN";
 
   char statusBuf[48];
-  snprintf(statusBuf, sizeof(statusBuf), "%s | %s | %s | P%u/4",
-           modeTag, srcTag, langTag, static_cast<unsigned>(ctx.page) + 1);
+  snprintf(statusBuf, sizeof(statusBuf), "%s | %s | %s | P%u/%u",
+           modeTag, srcTag, langTag,
+           static_cast<unsigned>(ctx.page) + 1,
+           static_cast<unsigned>(PageId::PAGE_COUNT));
   gfx.setFont(&FreeSansBold9pt7b);
   gfx.setCursor(524, 29);
   gfx.print(statusBuf);
@@ -461,6 +463,82 @@ void UiRenderer::drawWeatherPage(DisplayDriver& display, const UiContext& ctx) {
   }
 }
 
+void UiRenderer::drawStocksPage(DisplayDriver& display, const UiContext& ctx) {
+  auto& gfx = display.gfx();
+  const int bodyTop = AppConfig::TOP_BAR_HEIGHT + 2;
+  const int halfW = AppConfig::DISPLAY_WIDTH / 2;
+
+  gfx.fillRect(halfW - 1, bodyTop, 2, AppConfig::DISPLAY_HEIGHT - bodyTop - 2, 1);
+
+  drawCardHeader(display, 4, bodyTop, halfW - 6, 24,
+                 ctx.lang == LangMode::ZH_TW ? "台股與 ETF (1/2)" : "TW ETF & TSMC (1/2)");
+  drawCardHeader(display, halfW + 2, bodyTop, halfW - 6, 24,
+                 ctx.lang == LangMode::ZH_TW ? "債券 ETF 與指數 (2/2)" : "BOND & INDEX (2/2)");
+
+  const StockState* st = ctx.stocks;
+  if (!st || st->itemCount == 0) {
+    drawMixedBold(gfx, 24, bodyTop + 60, ctx.lang == LangMode::ZH_TW ? "等待市場報價同步..." : "Waiting stock sync...");
+    return;
+  }
+
+  const int rowTop0 = bodyTop + 28;
+  const int rowH = 40;
+  for (uint8_t i = 0; i < st->itemCount && i < 10; ++i) {
+    const auto& it = st->items[i];
+    const int col = i / 5;
+    const int row = i % 5;
+    const int xCol = (col == 0) ? 10 : (halfW + 8);
+    const int yTop = rowTop0 + row * rowH;
+    const int yBase = yTop + 26;
+
+    if (row < 4) {
+      gfx.drawFastHLine(xCol, yTop + rowH - 3, halfW - 20, 1);
+    }
+
+    if (ctx.lang == LangMode::ZH_TW) {
+      gfx.setFont(&FreeSansBold9pt7b);
+      gfx.setTextColor(1);
+      gfx.setCursor(xCol, yBase);
+      gfx.print(it.code);
+      drawMixedBold(gfx, xCol + 66, yBase, it.zhName);
+    } else {
+      gfx.setFont(&FreeSansBold9pt7b);
+      gfx.setTextColor(1);
+      gfx.setCursor(xCol, yBase);
+      gfx.print(it.enName);
+    }
+
+    char priceBuf[16];
+    char pctBuf[16];
+    if (it.valid) {
+      if (it.decimals == 0) {
+        snprintf(priceBuf, sizeof(priceBuf), "%.0f", it.price);
+      } else if (it.decimals == 1) {
+        snprintf(priceBuf, sizeof(priceBuf), "%.1f", it.price);
+      } else {
+        snprintf(priceBuf, sizeof(priceBuf), "%.2f", it.price);
+      }
+      snprintf(pctBuf, sizeof(pctBuf), "%+.2f%%", it.changePct);
+    } else {
+      snprintf(priceBuf, sizeof(priceBuf), "--");
+      snprintf(pctBuf, sizeof(pctBuf), "--");
+    }
+
+    int16_t bx, by;
+    uint16_t bw, bh;
+    gfx.setFont(&FreeSansBold9pt7b);
+    gfx.setTextColor(1);
+
+    gfx.getTextBounds(priceBuf, 0, 0, &bx, &by, &bw, &bh);
+    gfx.setCursor(xCol + 306 - static_cast<int>(bw), yBase);
+    gfx.print(priceBuf);
+
+    gfx.getTextBounds(pctBuf, 0, 0, &bx, &by, &bw, &bh);
+    gfx.setCursor(xCol + 376 - static_cast<int>(bw), yBase);
+    gfx.print(pctBuf);
+  }
+}
+
 void UiRenderer::render(DisplayDriver& display, const UiContext& ctx, bool forceFull) {
   display.clearCanvas();
   drawTopBar(display, ctx);
@@ -470,6 +548,7 @@ void UiRenderer::render(DisplayDriver& display, const UiContext& ctx, bool force
     case PageId::CODEX_DETAIL:  drawCodexDetailPage(display, ctx); break;
     case PageId::GEMINI_DETAIL: drawGeminiDetailPage(display, ctx); break;
     case PageId::WEATHER_5DAY:  drawWeatherPage(display, ctx); break;
+    case PageId::STOCKS:        drawStocksPage(display, ctx); break;
     default:                    drawOverviewPage(display, ctx); break;
   }
 

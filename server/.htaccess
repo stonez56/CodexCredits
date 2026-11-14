@@ -6,7 +6,7 @@
 </IfModule>
 
 # 2. 禁止瀏覽器直接讀取機密設定與快取 JSON 檔
-<FilesMatch "^(config\.php|config\.example\.php|quota_data\.json)$">
+<FilesMatch "^(config\.php|config\.example\.php|quota_data\.json|stocks_cache\.json)$">
     Require all denied
 </FilesMatch>
 
