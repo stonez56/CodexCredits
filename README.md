@@ -195,10 +195,28 @@ stonez56.com/codexcredit/
    python push_quota.py
    ```
    - `push_quota.py` 會自動讀取本機 `~/.codex/auth.json` 的 Bearer Token 請求 `https://chatgpt.com/backend-api/wham/usage`，取得最新 Codex `5h` / `weekly` 剩餘 % 與重設 epoch 後覆寫合併；若 Token 過期或離線則自動降級沿用 `pusher/real_quota.json` 快取。
+   - **運作與關機說明**：
+     - **電腦開機（且有執行或排程 `push_quota.py`）時**：Codex Plus 剩餘 `%` 與倒數會持續保持最新。
+     - **電腦關機時**：**美股報價**（`stocks.php`）與**所有剩餘時間倒數**（ESP32 以 NTP 與 `expires_at_epoch` 自動推算）仍會正常更新；但 **Codex / Gemini 剩餘 `%` 數會停留在關機前最後一次推播的數值**（`stonez56.com` 僅作中繼站，不存放您的 OpenAI / Google 帳號憑證）。
 3. 於 ESP32 Captive Portal（或 `firmware/include/secrets.h`）設定：
    - **Quota URL**：`https://stonez56.com/codexcredit/api/quota.php`
    - **Quota Token**：同一組 `Bearer Token`
    - 關閉 Mock 模式（或等待正式資料寫入），即可在裝置上看見動態模型池（`Gemini Models`、`Claude & GPT`、`Gemini 4 Argon` 等）與 Codex Plus 即時倒數。
+
+### 4. 在另一台筆電（NB）安裝推播腳本
+若您在筆電（NB）上使用 Codex / Gemini，只要在 NB 完成以下步驟即可接手更新：
+1. 安裝 Python 3，並將本專案（或 `pusher/` 目錄）拉取到 NB：
+   ```bash
+   git clone https://github.com/stonez56/CodexCredits.git
+   cd CodexCredits/pusher
+   ```
+2. 從桌機複製 **`pusher/.env`** 到 NB 的 `pusher/.env`（或手動建立，填入相同的 `QUOTA_API_URL` 與 `QUOTA_API_TOKEN`）。
+3. （選用）若想保留相同的 Gemini Pro #1 / #2 與 Codex 重設排程，也可把桌機的 **`pusher/real_quota.json`** 一併複製到 NB 的 `pusher/` 目錄。
+4. 確認 NB 上已登入 Codex CLI（本機存在 `~/.codex/auth.json`），即可執行測試：
+   ```bash
+   python push_quota.py
+   ```
+5. （建議）在 NB 的 Windows **工作排程器**建立定時任務，開機時每 10～15 分鐘自動執行 `python push_quota.py`，即可無感保持最新數據。
 
 ---
 
