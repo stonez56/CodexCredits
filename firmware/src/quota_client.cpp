@@ -10,6 +10,15 @@ namespace {
     if (v > 100) return 100;
     return static_cast<uint8_t>(v);
   }
+
+  void initPool(GeminiPoolData& pd, const char* name, bool hasW, QuotaWindow w, bool has5h, QuotaWindow f) {
+    pd.valid = true;
+    strlcpy(pd.name, name, sizeof(pd.name));
+    pd.hasWeekly = hasW;
+    pd.weekly = w;
+    pd.hasFiveHour = has5h;
+    pd.fiveHour = f;
+  }
 }
 
 void QuotaClient::loadMock(time_t nowEpoch, QuotaState& state) {
@@ -34,13 +43,21 @@ void QuotaClient::loadMock(time_t nowEpoch, QuotaState& state) {
   state.geminiCount = 2;
   state.gemini[0].valid = true;
   strlcpy(state.gemini[0].label, "Gemini Pro #1", sizeof(state.gemini[0].label));
-  state.gemini[0].weekly   = { 100, nowEpoch + (6 * 86400 + 22 * 3600) };
-  state.gemini[0].fiveHour = { 99,  nowEpoch + (3 * 3600 + 43 * 60) };
+  state.gemini[0].weekly   = { 82, nowEpoch + (6 * 86400 + 20 * 3600) };
+  state.gemini[0].fiveHour = { 38, nowEpoch + (1 * 3600 + 7 * 60) };
+  state.gemini[0].poolCount = 3;
+  initPool(state.gemini[0].pools[0], "Gemini Models",  true, state.gemini[0].weekly, true, state.gemini[0].fiveHour);
+  initPool(state.gemini[0].pools[1], "Claude & GPT",   true, { 100, nowEpoch + 6 * 86400 }, true, { 100, nowEpoch + 5 * 3600 });
+  initPool(state.gemini[0].pools[2], "Gemini 4 Argon", true, { 100, nowEpoch + 6 * 86400 }, false, { 0, 0 });
 
   state.gemini[1].valid = true;
   strlcpy(state.gemini[1].label, "Gemini Pro #2", sizeof(state.gemini[1].label));
-  state.gemini[1].weekly   = { 85, nowEpoch + (4 * 86400 + 11 * 3600) };
-  state.gemini[1].fiveHour = { 60, nowEpoch + (2 * 3600 + 15 * 60) };
+  state.gemini[1].weekly   = { 95, nowEpoch + (4 * 86400 + 11 * 3600) };
+  state.gemini[1].fiveHour = { 90, nowEpoch + (2 * 3600 + 15 * 60) };
+  state.gemini[1].poolCount = 3;
+  initPool(state.gemini[1].pools[0], "Gemini Models",  true, state.gemini[1].weekly, true, state.gemini[1].fiveHour);
+  initPool(state.gemini[1].pools[1], "Claude & GPT",   true, { 100, nowEpoch + 6 * 86400 }, true, { 60, nowEpoch + 2 * 3600 });
+  initPool(state.gemini[1].pools[2], "Gemini 4 Argon", true, { 100, nowEpoch + 6 * 86400 }, false, { 0, 0 });
 }
 
 bool QuotaClient::parsePayload(const String& jsonStr, QuotaState& state) {
@@ -88,10 +105,36 @@ bool QuotaClient::parsePayload(const String& jsonStr, QuotaState& state) {
     GeminiAccountData& dst = next.gemini[next.geminiCount++];
     dst.valid = true;
     strlcpy(dst.label, g["label"] | "Gemini Pro", sizeof(dst.label));
-    dst.weekly.remainingPct     = clampPct(g["weekly"]["remaining_pct"] | 0);
-    dst.weekly.expiresAtEpoch   = g["weekly"]["expires_at_epoch"] | 0;
-    dst.fiveHour.remainingPct   = clampPct(g["five_hour"]["remaining_pct"] | 0);
-    dst.fiveHour.expiresAtEpoch = g["five_hour"]["expires_at_epoch"] | 0;
+    dst.poolCount = 0;
+
+    JsonArray pools = g["pools"];
+    if (!pools.isNull() && pools.size() > 0) {
+      for (JsonObject p : pools) {
+        if (dst.poolCount >= 4) break;
+        GeminiPoolData& pd = dst.pools[dst.poolCount++];
+        pd.valid = true;
+        strlcpy(pd.name, p["name"] | "Model Pool", sizeof(pd.name));
+        pd.hasWeekly = !p["weekly"].isNull();
+        if (pd.hasWeekly) {
+          pd.weekly.remainingPct   = clampPct(p["weekly"]["remaining_pct"] | 0);
+          pd.weekly.expiresAtEpoch = p["weekly"]["expires_at_epoch"] | 0;
+        }
+        pd.hasFiveHour = !p["five_hour"].isNull();
+        if (pd.hasFiveHour) {
+          pd.fiveHour.remainingPct   = clampPct(p["five_hour"]["remaining_pct"] | 0);
+          pd.fiveHour.expiresAtEpoch = p["five_hour"]["expires_at_epoch"] | 0;
+        }
+      }
+      dst.weekly   = dst.pools[0].hasWeekly   ? dst.pools[0].weekly   : QuotaWindow{0, 0};
+      dst.fiveHour = dst.pools[0].hasFiveHour ? dst.pools[0].fiveHour : QuotaWindow{0, 0};
+    } else {
+      dst.weekly.remainingPct     = clampPct(g["weekly"]["remaining_pct"] | 0);
+      dst.weekly.expiresAtEpoch   = g["weekly"]["expires_at_epoch"] | 0;
+      dst.fiveHour.remainingPct   = clampPct(g["five_hour"]["remaining_pct"] | 0);
+      dst.fiveHour.expiresAtEpoch = g["five_hour"]["expires_at_epoch"] | 0;
+      dst.poolCount = 1;
+      initPool(dst.pools[0], "Gemini Models", true, dst.weekly, true, dst.fiveHour);
+    }
   }
 
   state = next;

@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "generated_at_epoch": 1794632640,
   "codex_plus": {
     "status": "ok",
@@ -27,27 +27,42 @@
     {
       "label": "Gemini Pro #1",
       "status": "ok",
-      "weekly": {
-        "remaining_pct": 100,
-        "expires_at_epoch": 1795230240
-      },
-      "five_hour": {
-        "remaining_pct": 99,
-        "expires_at_epoch": 1794646020
-      }
+      "pools": [
+        {
+          "name": "Gemini Models",
+          "weekly": { "remaining_pct": 82, "expires_at_epoch": 1795223040 },
+          "five_hour": { "remaining_pct": 38, "expires_at_epoch": 1794636660 }
+        },
+        {
+          "name": "Claude & GPT",
+          "weekly": { "remaining_pct": 100, "expires_at_epoch": 1795230240 },
+          "five_hour": { "remaining_pct": 100, "expires_at_epoch": 1794646020 }
+        },
+        {
+          "name": "Gemini 4 Argon",
+          "weekly": { "remaining_pct": 100, "expires_at_epoch": 1795230240 }
+        }
+      ]
     },
     {
       "label": "Gemini Pro #2",
       "status": "ok",
-      "weekly": {
-        "remaining_pct": 85,
-        "expires_at_epoch": 1795017840
-      },
-      "five_hour": {
-        "remaining_pct": 60,
-        "expires_at_epoch": 1794640740
-      }
+      "pools": [
+        {
+          "name": "Gemini Models",
+          "weekly": { "remaining_pct": 95, "expires_at_epoch": 1795017840 },
+          "five_hour": { "remaining_pct": 90, "expires_at_epoch": 1794640740 }
+        },
+        {
+          "name": "Claude & GPT",
+          "weekly": { "remaining_pct": 100, "expires_at_epoch": 1795230240 },
+          "five_hour": { "remaining_pct": 60, "expires_at_epoch": 1794640740 }
+        },
+        {
+          "name": "Gemini 4 Argon",
+          "weekly": { "remaining_pct": 100, "expires_at_epoch": 1795230240 }
+        }
+      ]
     }
   ]
 }
-

@@ -15,7 +15,14 @@ secrets.h
 */secrets.h
 include/secrets.h
 firmware/include/secrets.h
+config.php
+server/config.php
+server/quota_data.json
+pusher/.env
+.env
+*.env
 
 # OS generated files
 .DS_Store
 Thumbs.db
+

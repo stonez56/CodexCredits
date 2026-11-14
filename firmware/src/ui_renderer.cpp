@@ -259,6 +259,16 @@ void UiRenderer::drawOverviewPage(DisplayDriver& display, const UiContext& ctx) 
     gfx.setCursor(x0, 206);
     gfx.print(buf);
     drawPctWithRing(display, ringX, 192, 17, 4, g.fiveHour.remainingPct);
+
+    if (g.poolCount >= 3) {
+      gfx.drawLine(xBase + 14, 224, xBase + colW - 14, 224, 1);
+      gfx.setFont(&FreeSansBold9pt7b);
+      gfx.setCursor(x0, 248);
+      gfx.printf("C/GPT:%u%%  %s:%u%%",
+                 g.pools[1].weekly.remainingPct,
+                 strncmp(g.pools[2].name, "Gemini 4 ", 9) == 0 ? g.pools[2].name + 9 : g.pools[2].name,
+                 g.pools[2].weekly.remainingPct);
+    }
   }
 }
 
@@ -324,31 +334,70 @@ void UiRenderer::drawGeminiDetailPage(DisplayDriver& display, const UiContext& c
   const int halfX = 396;
   gfx.fillRect(halfX, bodyTop, 2, AppConfig::DISPLAY_HEIGHT - bodyTop - 2, 1);
 
-  char tBuf[48];
-  char line[64];
-
   for (uint8_t i = 0; i < 2; ++i) {
     const int xBase = (i == 0) ? 0 : halfX;
-    const int x0 = xBase + 18;
+    const int x0 = xBase + 16;
     const GeminiAccountData& g = ctx.quota->gemini[i];
 
     drawCardHeader(display, xBase + 4, bodyTop, halfX - 6, 26,
                    g.valid ? g.label : "GEMINI PRO");
     if (!g.valid) continue;
 
-    drawMixedBold(gfx, x0, 102, ctx.lang == LangMode::ZH_TW ? "每週限額剩餘 (Weekly)" : "Weekly Limit Remaining");
-    QuotaClient::formatCountdownFull(g.weekly.expiresAtEpoch, ctx.nowEpoch, ctx.lang, tBuf, sizeof(tBuf));
-    snprintf(line, sizeof(line), ctx.lang == LangMode::ZH_TW ? "重設倒數: %s" : "Refresh in %s", tBuf);
-    drawMixedBold(gfx, x0, 128, line);
-    drawPctWithRing(display, xBase + 356, 114, 22, 5, g.weekly.remainingPct);
+    // 動態繪製該帳號下的所有模型池 (Gemini Models, Claude & GPT, Gemini 4 Argon 或未來新名稱)
+    int y = 96;
+    for (uint8_t p = 0; p < g.poolCount && p < 4; ++p) {
+      const GeminiPoolData& pool = g.pools[p];
+      if (!pool.valid) continue;
 
-    gfx.drawLine(xBase + 16, 158, xBase + halfX - 16, 158, 1);
+      if (p > 0) {
+        gfx.drawLine(xBase + 14, y - 22, xBase + halfX - 14, y - 22, 1);
+      }
 
-    drawMixedBold(gfx, x0, 190, ctx.lang == LangMode::ZH_TW ? "5小時限額剩餘 (5-Hour)" : "Five Hour Limit Remaining");
-    QuotaClient::formatCountdownFull(g.fiveHour.expiresAtEpoch, ctx.nowEpoch, ctx.lang, tBuf, sizeof(tBuf));
-    snprintf(line, sizeof(line), ctx.lang == LangMode::ZH_TW ? "重設倒數: %s" : "Refresh in %s", tBuf);
-    drawMixedBold(gfx, x0, 216, line);
-    drawPctWithRing(display, xBase + 356, 202, 22, 5, g.fiveHour.remainingPct);
+      gfx.setFont(&FreeSansBold9pt7b);
+      gfx.setTextColor(1);
+      gfx.setCursor(x0, y);
+      gfx.print(pool.name);
+
+      // 右側：顯示 Weekly (W) 與 5hr (5h) 百分比與圓環
+      if (pool.hasWeekly && pool.hasFiveHour) {
+        gfx.setCursor(xBase + 184, y);
+        gfx.printf("W:%u%%", pool.weekly.remainingPct);
+        display.drawRingGauge(xBase + 258, y - 5, 12, 3, pool.weekly.remainingPct);
+
+        gfx.setCursor(xBase + 286, y);
+        gfx.printf("5h:%u%%", pool.fiveHour.remainingPct);
+        display.drawRingGauge(xBase + 368, y - 5, 12, 3, pool.fiveHour.remainingPct);
+      } else if (pool.hasWeekly) {
+        gfx.setCursor(xBase + 266, y);
+        gfx.printf("W:%u%%", pool.weekly.remainingPct);
+        display.drawRingGauge(xBase + 368, y - 5, 12, 3, pool.weekly.remainingPct);
+      }
+
+      // 第二行顯示完整倒數（若有）
+      char wBuf[32] = "";
+      char hBuf[24] = "";
+      if (pool.hasWeekly) {
+        QuotaClient::formatCountdownFull(pool.weekly.expiresAtEpoch, ctx.nowEpoch, ctx.lang, wBuf, sizeof(wBuf));
+      }
+      if (pool.hasFiveHour) {
+        QuotaClient::formatCountdownHoursMin(pool.fiveHour.expiresAtEpoch, ctx.nowEpoch, hBuf, sizeof(hBuf));
+      }
+
+      char subLine[64];
+      if (pool.hasWeekly && pool.hasFiveHour) {
+        snprintf(subLine, sizeof(subLine), "%s: %s  |  5h: %s",
+                 ctx.lang == LangMode::ZH_TW ? "週重設" : "W-Reset", wBuf, hBuf);
+      } else if (pool.hasWeekly) {
+        snprintf(subLine, sizeof(subLine), "%s: %s",
+                 ctx.lang == LangMode::ZH_TW ? "週重設" : "Weekly Reset", wBuf);
+      } else {
+        subLine[0] = '\0';
+      }
+      if (subLine[0] != '\0') {
+        drawMixedBold(gfx, x0, y + 22, subLine);
+      }
+      y += 60;
+    }
   }
 }
 
@@ -425,6 +474,30 @@ void UiRenderer::render(DisplayDriver& display, const UiContext& ctx, bool force
   }
 
   display.commit(forceFull);
+}
+
+void UiRenderer::renderSplashScreen(DisplayDriver& display, const char* version, const char* statusText) {
+  display.clearCanvas();
+  auto& gfx = display.gfx();
+  gfx.drawRect(4, 4, AppConfig::DISPLAY_WIDTH - 8, AppConfig::DISPLAY_HEIGHT - 8, 1);
+  gfx.drawRect(6, 6, AppConfig::DISPLAY_WIDTH - 12, AppConfig::DISPLAY_HEIGHT - 12, 1);
+
+  gfx.setTextColor(1);
+  gfx.setFont(&FreeSansBold18pt7b);
+  gfx.setCursor(48, 92);
+  gfx.printf("CodexCredits  %s", version);
+
+  gfx.setFont(&FreeSansBold12pt7b);
+  gfx.setCursor(48, 140);
+  gfx.print("CrowPanel 5.79\" E-Paper AI & Weather Monitor");
+
+  gfx.fillRect(48, 166, AppConfig::DISPLAY_WIDTH - 96, 3, 1);
+
+  gfx.setFont(&FreeSansBold12pt7b);
+  gfx.setCursor(48, 212);
+  gfx.print(statusText);
+
+  display.commitFull();
 }
 
 void UiRenderer::renderPortalScreen(DisplayDriver& display, const char* apName, const char* apIp) {

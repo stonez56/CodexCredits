@@ -41,11 +41,22 @@ struct CodexPlusData {
   uint8_t resetEpochsCount;
 };
 
+struct GeminiPoolData {
+  bool valid;
+  char name[25];
+  bool hasWeekly;
+  QuotaWindow weekly;
+  bool hasFiveHour;
+  QuotaWindow fiveHour;
+};
+
 struct GeminiAccountData {
   bool valid;
   char label[25];
   QuotaWindow weekly;
   QuotaWindow fiveHour;
+  GeminiPoolData pools[4];
+  uint8_t poolCount;
 };
 
 struct QuotaState {

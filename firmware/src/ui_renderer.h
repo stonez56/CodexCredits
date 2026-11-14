@@ -21,6 +21,7 @@ class UiRenderer {
 public:
   void begin(DisplayDriver& display);
   void render(DisplayDriver& display, const UiContext& ctx, bool forceFull);
+  void renderSplashScreen(DisplayDriver& display, const char* version, const char* statusText);
   void renderPortalScreen(DisplayDriver& display, const char* apName, const char* apIp);
 
 private:

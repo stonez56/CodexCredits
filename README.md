@@ -127,6 +127,50 @@ pio run -t upload --upload-port crowpanel-epaper.local
 
 ---
 
+## Stonez56.com 中繼站部署教學 (PHP 8.3 Server + Pusher)
+
+本專案提供輕量級 PHP 8.3 中繼 API（位於 `server/`）與本機 Python 推送腳本（位於 `pusher/`），讓 ESP32 透過 HTTPS `Bearer Token` 安全讀取您帳號的即時額度，同時將機密留在伺服器與本機，不進入 Git 版本庫。
+
+### 1. 產生高強度 Bearer Token
+在終端機執行以下指令產生 256-bit 隨機金鑰（**ESP32、伺服器、Pusher 三端必須一致**）：
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+### 2. 部署 PHP 8.3 伺服器端 (`server/`)
+1. 在 `stonez56.com` 網站目錄下建立資料夾（例如 `/api/codex/`）。
+2. 上傳 `server/quota.php` 與 `server/.htaccess`（`.htaccess` 負責保留 Apache `Authorization` Header 並封鎖外部直接存取 `config.php` 與 `quota_data.json`）。
+3. 複製 `server/config.example.php` 為 **`server/config.php`**（此檔已被 `.gitignore` 排除，切勿提交），並填入剛剛產生的 Token：
+   ```php
+   <?php
+   declare(strict_types=1);
+   return [
+       'api_token' => '貼上剛剛產生的_32_字元以上_TOKEN',
+       'data_file' => __DIR__ . '/quota_data.json',
+   ];
+   ```
+4. 確認該目錄對 PHP 執行身分（如 `www-data`）具有寫入 `quota_data.json` 的權限（建議資料夾 `755`，若需由 PHP 建立檔案可暫設寫入權限或預先 `touch quota_data.json` 並設為 `640`）。
+5. 驗證 Fail-Closed 安全機制：
+   ```bash
+   # 未帶 Token 應回傳 401 Unauthorized
+   curl -i https://stonez56.com/api/codex/quota.php
+   ```
+
+### 3. 設定本機 Pusher (`pusher/`) 與 ESP32
+1. 複製 `pusher/.env.example` 為 **`pusher/.env`**（已被 `.gitignore` 排除），設定 `QUOTA_PUSH_URL` 與同一組 `QUOTA_API_TOKEN`。
+2. 執行推送測試（預設讀取 `mock_server/mock_quota.json` 或您的真實額度資料）：
+   ```bash
+   cd pusher
+   pip install requests python-dotenv
+   python push_quota.py
+   ```
+3. 於 ESP32 Captive Portal（或 `firmware/include/secrets.h`）設定：
+   - **Quota URL**：`https://stonez56.com/api/codex/quota.php`
+   - **Quota Token**：同一組 `Bearer Token`
+   - 關閉 Mock 模式（或等待正式資料寫入），即可在裝置上看見動態模型池（`Gemini Models`、`Claude & GPT`、`Gemini 4 Argon` 等）與 Codex Plus 即時倒數。
+
+---
+
 ## 本地測試 Mock 伺服器 (Optional)
 
 專案內附 `mock_server/`，供無正式後端 API 時本地測試即時倒數與動態額度：
@@ -141,3 +185,4 @@ python serve.py --port 8080
 ## 授權條款 (License)
 
 本專案採用 [MIT License](LICENSE) 授權釋出。
+
