@@ -136,7 +136,7 @@ def build_payload(src_path: Path, live_merge: bool = False) -> bytes:
     return json.dumps(data, ensure_ascii=False).encode("utf-8")
 
 
-def main() -> int:
+def main(src_override: Path | None = None) -> int:
     load_env()
     url = os.environ.get("QUOTA_API_URL", "")
     token = os.environ.get("QUOTA_API_TOKEN", "")
@@ -148,7 +148,10 @@ def main() -> int:
         print("ERROR: QUOTA_API_TOKEN is not set in pusher/.env", file=sys.stderr)
         return 1
 
-    if len(sys.argv) > 1:
+    if src_override is not None:
+        src_path = src_override
+        live_merge = (src_override == REAL_JSON)
+    elif len(sys.argv) > 1:
         src_path = Path(sys.argv[1])
         live_merge = False
     else:

@@ -50,7 +50,7 @@ def parse_datetime_epoch(text: str, now_dt: dt.datetime) -> int:
 
     for fmt in ("%m/%d %H:%M", "%m-%d %H:%M"):
         try:
-            parsed = dt.datetime.strptime(s, fmt).replace(year=now_dt.year, tzinfo=LOCAL_TZ)
+            parsed = dt.datetime.strptime(f"{now_dt.year}/{s}", f"%Y/{fmt}").replace(tzinfo=LOCAL_TZ)
             if (now_dt - parsed).total_seconds() > 30 * 86400:
                 parsed = parsed.replace(year=now_dt.year + 1)
             return int(parsed.timestamp())
@@ -199,7 +199,7 @@ def main() -> int:
 
     if args.push:
         import push_quota
-        return push_quota.main()
+        return push_quota.main(REAL_JSON if REAL_JSON.exists() else None)
 
     return 0
 
