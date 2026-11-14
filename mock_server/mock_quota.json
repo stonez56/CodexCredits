@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "generated_at_epoch": 1794632640,
+  "codex_plus": {
+    "status": "ok",
+    "five_hour": {
+      "remaining_pct": 100,
+      "expires_at_epoch": 1794646020
+    },
+    "weekly": {
+      "remaining_pct": 78,
+      "expires_at_epoch": 1795043640
+    },
+    "purchased_credits": {
+      "has_credits": true,
+      "display_text": "$12.50"
+    },
+    "resets": {
+      "available_count": 2,
+      "schedule_epochs": [
+        1794717000,
+        1795018800
+      ]
+    }
+  },
+  "gemini_pro_accounts": [
+    {
+      "label": "Gemini Pro #1",
+      "status": "ok",
+      "weekly": {
+        "remaining_pct": 100,
+        "expires_at_epoch": 1795230240
+      },
+      "five_hour": {
+        "remaining_pct": 99,
+        "expires_at_epoch": 1794646020
+      }
+    },
+    {
+      "label": "Gemini Pro #2",
+      "status": "ok",
+      "weekly": {
+        "remaining_pct": 85,
+        "expires_at_epoch": 1795017840
+      },
+      "five_hour": {
+        "remaining_pct": 60,
+        "expires_at_epoch": 1794640740
+      }
+    }
+  ]
+}
+
