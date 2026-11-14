@@ -138,9 +138,19 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
 ### 2. 部署 PHP 8.3 伺服器端 (`server/`)
-1. 在 `stonez56.com` 網站目錄下建立資料夾（例如 `/api/codex/`）。
-2. 上傳 `server/quota.php` 與 `server/.htaccess`（`.htaccess` 負責保留 Apache `Authorization` Header 並封鎖外部直接存取 `config.php` 與 `quota_data.json`）。
-3. 複製 `server/config.example.php` 為 **`server/config.php`**（此檔已被 `.gitignore` 排除，切勿提交），並填入剛剛產生的 Token：
+為落實機密與公開程式分離（縱深防禦），建議將 `config.php` 與快取 `.json` 放在上層目錄，API 執行檔放在 `api/` 子目錄：
+```text
+stonez56.com/codexcredit/
+├── .htaccess          (封鎖外部直讀 config.php 與 *.json)
+├── config.php         (機密 Token 與 data_file 路徑，不上傳 Git)
+├── quota_data.json    (由 PHP 自動建立寫入)
+└── api/
+    ├── .htaccess      (保留 Authorization Header)
+    └── quota.php      (公開 API 端點，會自動優先讀取 ../config.php)
+```
+1. 在 `stonez56.com` 建立 `codexcredit/` 與 `codexcredit/api/` 兩個目錄。
+2. 將 `server/quota.php` 與 `server/.htaccess` 上傳至 `codexcredit/api/`；並在 `codexcredit/` 放置 `.htaccess` 封鎖 `config.php` 與 `*.json`（若 `codexcredit/` 位於網頁根目錄外則更佳）。
+3. 複製 `server/config.example.php` 為 **`codexcredit/config.php`**（本機測試檔已由 `.gitignore` 排除，切勿提交），並填入剛剛產生的 Token：
    ```php
    <?php
    declare(strict_types=1);
@@ -149,15 +159,17 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
        'data_file' => __DIR__ . '/quota_data.json',
    ];
    ```
-4. 確認該目錄對 PHP 執行身分（如 `www-data`）具有寫入 `quota_data.json` 的權限（建議資料夾 `755`，若需由 PHP 建立檔案可暫設寫入權限或預先 `touch quota_data.json` 並設為 `640`）。
+4. 確認 `codexcredit/` 目錄對 PHP 執行身分（如 `www-data`）具有寫入 `quota_data.json` 的權限（建議資料夾 `755`、`config.php` `640`）。
 5. 驗證 Fail-Closed 安全機制：
    ```bash
    # 未帶 Token 應回傳 401 Unauthorized
-   curl -i https://stonez56.com/api/codex/quota.php
+   curl -i https://stonez56.com/codexcredit/api/quota.php
+   # 上層 config.php 應回傳 403 Forbidden
+   curl -i https://stonez56.com/codexcredit/config.php
    ```
 
 ### 3. 設定本機 Pusher (`pusher/`) 與 ESP32
-1. 複製 `pusher/.env.example` 為 **`pusher/.env`**（已被 `.gitignore` 排除），設定 `QUOTA_PUSH_URL` 與同一組 `QUOTA_API_TOKEN`。
+1. 複製 `pusher/.env.example` 為 **`pusher/.env`**（已被 `.gitignore` 排除），設定 `QUOTA_PUSH_URL=https://stonez56.com/codexcredit/api/quota.php` 與同一組 `QUOTA_API_TOKEN`。
 2. 執行推送測試（預設讀取 `mock_server/mock_quota.json` 或您的真實額度資料）：
    ```bash
    cd pusher
@@ -165,7 +177,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
    python push_quota.py
    ```
 3. 於 ESP32 Captive Portal（或 `firmware/include/secrets.h`）設定：
-   - **Quota URL**：`https://stonez56.com/api/codex/quota.php`
+   - **Quota URL**：`https://stonez56.com/codexcredit/api/quota.php`
    - **Quota Token**：同一組 `Bearer Token`
    - 關閉 Mock 模式（或等待正式資料寫入），即可在裝置上看見動態模型池（`Gemini Models`、`Claude & GPT`、`Gemini 4 Argon` 等）與 Codex Plus 即時倒數。
 

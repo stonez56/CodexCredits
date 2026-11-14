@@ -10,17 +10,30 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate');
 
 const MAX_PAYLOAD_BYTES = 4096;
-const DATA_FILE = __DIR__ . '/quota_data.json';
-const CONFIG_FILE = __DIR__ . '/config.php';
 
-// 1. Fail-Closed 載入設定（環境變數優先，其次 config.php）
+// 1. Fail-Closed 載入設定（環境變數優先，其次上層 ../config.php，最後同層 config.php）
+$parentConfig = dirname(__DIR__) . '/config.php';
+$localConfig  = __DIR__ . '/config.php';
+$configFile   = file_exists($parentConfig) ? $parentConfig : $localConfig;
+
 $expectedToken = getenv('QUOTA_API_TOKEN') ?: '';
-if ($expectedToken === '' && file_exists(CONFIG_FILE)) {
-    $cfg = require CONFIG_FILE;
-    if (is_array($cfg) && isset($cfg['api_token'])) {
-        $expectedToken = (string)$cfg['api_token'];
+$dataFile = file_exists($parentConfig)
+    ? (dirname(__DIR__) . '/quota_data.json')
+    : (__DIR__ . '/quota_data.json');
+
+if (file_exists($configFile)) {
+    $cfg = require $configFile;
+    if (is_array($cfg)) {
+        if ($expectedToken === '' && isset($cfg['api_token'])) {
+            $expectedToken = (string)$cfg['api_token'];
+        }
+        if (!empty($cfg['data_file'])) {
+            $dataFile = (string)$cfg['data_file'];
+        }
     }
 }
+
+define('DATA_FILE', $dataFile);
 
 if ($expectedToken === '' || str_starts_with($expectedToken, 'REPLACE_WITH_')) {
     http_response_code(500);

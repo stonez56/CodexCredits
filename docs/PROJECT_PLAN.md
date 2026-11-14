@@ -340,7 +340,7 @@ CodexCredits/
 2. **雙語介面（Switchable）**：支援 **繁體中文 / English 即時切換**（透過 `MENU` 選單或實體按鍵組合切換語系並觸發重繪）。
 3. **資料串接路線**：
    - **Phase 1～4**：使用本地 Mock Server（`mock_server/serve.py`）+ LittleFS 離線 Mock 驗證完整韌體、雙語 UI 與 4 分頁操作。
-   - **Phase 5（已實作部署架構）**：於 `stonez56.com` 部署 PHP 8.3 中繼 API（`server/quota.php`、`server/.htaccess`、`server/config.php`），實施 Fail-Closed `Bearer Token` 鑑權（`hash_equals`）、Atomic 檔案寫入與禁止外部直讀敏感檔；本機端透過 `pusher/push_quota.py` + `pusher/.env`（皆由 `.gitignore` 排除）定期推送 Schema v1.1（含動態 `pools[]` 模型池陣列）至中繼站供 ESP32 安全輪詢。
+   - **Phase 5（已實作部署架構）**：於 `stonez56.com/codexcredit/` 部署 PHP 8.3 中繼 API，採**機密與端點分層目錄設計**（上層 `codexcredit/config.php`、`quota_data.json` 搭配 `.htaccess` 禁止外部存取；下層 `codexcredit/api/quota.php` 對外服務並自動優先讀取 `../config.php`），實施 Fail-Closed `Bearer Token` 鑑權（`hash_equals`）與 Atomic 檔案寫入；本機端透過 `pusher/push_quota.py` + `pusher/.env`（皆由 `.gitignore` 排除）定期推送 Schema v1.1（含動態 `pools[]` 模型池陣列）至中繼站供 ESP32 安全輪詢。
 
 若以上規劃確認無誤，我們即可開始建立 `.AGENT.md` 與 **Phase 1（PlatformIO 專案骨架＋CrowPanel 5.79" 螢幕與按鍵實機驗證）**！
 

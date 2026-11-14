@@ -1,3 +1,6 @@
+# 0. 禁止列出目錄內容 (防止瀏覽 /codexcredit/ 或 /codexcredit/api/ 看到檔案清單)
+Options -Indexes
+
 # 1. 保留 Authorization Header 給 PHP 8.3 (Apache / FastCGI / PHP-FPM 必備)
 <IfModule mod_rewrite.c>
     RewriteEngine On
@@ -6,7 +9,7 @@
 </IfModule>
 
 # 2. 禁止瀏覽器直接讀取機密設定與快取 JSON 檔
-<FilesMatch "^(config\.php|config\.example\.php|quota_data\.json)$">
+<FilesMatch "^(config\.php|config\.example\.php|.*\.json)$">
     Require all denied
 </FilesMatch>
 
