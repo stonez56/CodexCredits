@@ -5,6 +5,8 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <WiFiManager.h>
+#include <WebServer.h>
+#include <Update.h>
 #include <Preferences.h>
 #include <ArduinoOTA.h>
 
@@ -32,6 +34,7 @@ namespace {
   constexpr char NVS_NS[] = "codex_cfg";
   constexpr char AP_NAME[] = "CrowPanel-Setup";
   constexpr uint32_t HTTP_TIMEOUT_MS = 8000;
+  WebServer g_versionServer(80);
 }
 
 bool NetManager::isPlaceholder(const char* val) {
@@ -185,11 +188,12 @@ int8_t NetManager::wifiRssi() const {
   return isWifiConnected() ? static_cast<int8_t>(WiFi.RSSI()) : -127;
 }
 
-void NetManager::beginOTA() {
+void NetManager::beginOTA(std::function<void()> onOtaStart) {
   if (otaStarted_ || !isWifiConnected()) return;
   ArduinoOTA.setHostname("crowpanel-epaper");
-  ArduinoOTA.onStart([]() {
+  ArduinoOTA.onStart([onOtaStart]() {
     Serial.println("[OTA] Update starting...");
+    if (onOtaStart) onOtaStart();
   });
   ArduinoOTA.onEnd([]() {
     Serial.println("\n[OTA] Update complete, rebooting...");
@@ -198,13 +202,50 @@ void NetManager::beginOTA() {
     Serial.printf("[OTA] Error[%u]\n", err);
   });
   ArduinoOTA.begin();
+  g_versionServer.on("/version", HTTP_GET, []() {
+    char buf[48];
+    snprintf(buf, sizeof(buf), "{\"version\":\"%s\"}", AppConfig::APP_VERSION);
+    g_versionServer.send(200, "application/json", buf);
+  });
+  g_versionServer.on("/update", HTTP_POST,
+    []() {
+      bool ok = !Update.hasError();
+      g_versionServer.send(ok ? 200 : 500, "application/json",
+                           ok ? "{\"status\":\"ok\"}" : "{\"status\":\"fail\"}");
+      delay(300);
+      if (ok) {
+        ESP.restart();
+      }
+    },
+    [onOtaStart]() {
+      HTTPUpload& upload = g_versionServer.upload();
+      if (upload.status == UPLOAD_FILE_START) {
+        Serial.printf("[OTA-HTTP] Receiving %s...\n", upload.filename.c_str());
+        if (onOtaStart) onOtaStart();
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+          Update.printError(Serial);
+        }
+      } else if (upload.status == UPLOAD_FILE_WRITE) {
+        if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+          Update.printError(Serial);
+        }
+      } else if (upload.status == UPLOAD_FILE_END) {
+        if (Update.end(true)) {
+          Serial.printf("[OTA-HTTP] Update success (%u bytes)\n", upload.totalSize);
+        } else {
+          Update.printError(Serial);
+        }
+      }
+    });
+  g_versionServer.begin();
   otaStarted_ = true;
-  Serial.println("[OTA] Ready at crowpanel-epaper.local");
+  Serial.printf("[OTA] Ready at crowpanel-epaper.local (%s)\n", AppConfig::APP_VERSION);
 }
 
 void NetManager::handleOTA() {
   if (otaStarted_) {
     ArduinoOTA.handle();
+    g_versionServer.handleClient();
   }
 }
 

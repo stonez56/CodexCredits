@@ -100,7 +100,7 @@ void setup() {
   g_input.begin();
   g_display.begin();
   g_ui.begin(g_display);
-  g_ui.renderSplashScreen(g_display, "v0.5", "Connecting Wi-Fi & Syncing Data...");
+  g_ui.renderSplashScreen(g_display, AppConfig::APP_VERSION, "Connecting Wi-Fi & Syncing Data...");
 
   g_net.loadConfig(g_cfg);
 
@@ -110,7 +110,9 @@ void setup() {
 
   if (g_net.begin(g_cfg, portalCb)) {
     g_net.syncNtp();
-    g_net.beginOTA();
+    g_net.beginOTA([]() {
+      g_ui.renderSplashScreen(g_display, AppConfig::APP_VERSION, "OTA Updating... Do not power off");
+    });
   }
 
   syncAllData(true);

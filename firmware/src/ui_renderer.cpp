@@ -181,13 +181,17 @@ void UiRenderer::drawTopBar(DisplayDriver& display, const UiContext& ctx) {
   const char* srcTag  = (ctx.quota && ctx.quota->isMock) ? "MOCK" : ((ctx.quota && ctx.quota->lastSyncOk) ? "LIVE" : "ERR");
   const char* langTag = (ctx.lang == LangMode::ZH_TW) ? "ZH" : "EN";
 
-  char statusBuf[48];
-  snprintf(statusBuf, sizeof(statusBuf), "%s | %s | %s | P%u/%u",
+  char statusBuf[64];
+  snprintf(statusBuf, sizeof(statusBuf), "%s | %s | %s | P%u/%u | %s",
            modeTag, srcTag, langTag,
            static_cast<unsigned>(ctx.page) + 1,
-           static_cast<unsigned>(PageId::PAGE_COUNT));
+           static_cast<unsigned>(PageId::PAGE_COUNT),
+           AppConfig::APP_VERSION);
   gfx.setFont(&FreeSansBold9pt7b);
-  gfx.setCursor(524, 29);
+  int16_t bx, by;
+  uint16_t bw, bh;
+  gfx.getTextBounds(statusBuf, 0, 0, &bx, &by, &bw, &bh);
+  gfx.setCursor(AppConfig::DISPLAY_WIDTH - 10 - static_cast<int>(bw), 29);
   gfx.print(statusBuf);
 }
 

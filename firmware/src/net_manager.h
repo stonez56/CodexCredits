@@ -19,7 +19,7 @@ public:
   bool isWifiConnected() const;
   int8_t wifiRssi() const;
 
-  void beginOTA();
+  void beginOTA(std::function<void()> onOtaStart = nullptr);
   void handleOTA();
 
   static bool httpGet(const char* url, const char* bearerToken, String& outPayload, size_t maxBytes);

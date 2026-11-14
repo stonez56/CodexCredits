@@ -120,11 +120,22 @@ pio device monitor -b 115200
 - **頂部按鍵 (`MENU`)**：立即強制連網同步所有 AI 額度與氣象；在 **Page 4 天氣頁** 按下可循環切換預設城市（新竹 → 台北 → 台中 → 高雄）。
 - **底部按鍵 (`EXIT`)**：一鍵跳回 **Page 1 總覽頁** 並立刻恢復 30 秒自動輪播。
 
-### 無線韌體更新 (ArduinoOTA)
-只要裝置已連上區網 Wi-Fi，日後更新程式碼完全不需連接 USB 線：
-```bash
-pio run -t upload --upload-port crowpanel-epaper.local
-```
+### 無線韌體更新 (HTTP Push OTA + 版本自動檢查)
+只要 ESP32 已完成過一次 USB 燒錄並連上區網 Wi-Fi（與電腦在**同一個區網**），日後更新程式碼完全不需插拔 USB 線，也不受 Windows 防火牆反向連線阻擋：
+
+1. **透過 mDNS 主機名稱進行無線更新（預設）**：
+   ```bash
+   cd firmware
+   pio run -e crowpanel_579_ota -t upload
+   ```
+   - 腳本（`firmware/scripts/ota_upload.py`）會先查詢 `http://crowpanel-epaper.local/version`；若裝置已是相同版本，會**自動跳過上傳**。
+   - 若為新版本，裝置螢幕會顯示 **`OTA Updating...`**，傳送完成後自動重啟，並在右上角狀態列顯示最新韌體版本號（例如 `v0.6.2`）。
+2. **若 Windows 無法解析 `crowpanel-epaper.local`**，可改以區網 IP 指定上傳：
+   ```bash
+   pio run -e crowpanel_579_ota -t upload --upload-port 192.168.x.x
+   ```
+3. **注意事項**：
+   - 更新期間請維持穩定供電（若使用行動電源，請確認不會因低電流自動斷電），完成重啟前勿斷電。
 
 ---
 
