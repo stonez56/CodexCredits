@@ -184,12 +184,17 @@ stonez56.com/codexcredit/
 
 ### 3. 設定本機 Pusher (`pusher/`) 與 ESP32
 1. 複製 `pusher/.env.example` 為 **`pusher/.env`**（已被 `.gitignore` 排除），設定 `QUOTA_PUSH_URL=https://stonez56.com/codexcredit/api/quota.php` 與同一組 `QUOTA_API_TOKEN`。
-2. 執行推送測試（預設讀取 `mock_server/mock_quota.json` 或您的真實額度資料）：
+2. 使用 `set_quota.py` 設定 Codex 重設時間表與 Gemini Pro #1 / #2 配額（寫入已被 `.gitignore` 排除的 `pusher/real_quota.json`），並執行 `push_quota.py`（純 Python 標準庫，無須額外安裝套件）：
    ```bash
    cd pusher
-   pip install requests python-dotenv
+   # 設定 Codex 重設時間 (UTC+8) 與 Gemini Pro #1 / #2 模型池
+   python set_quota.py --codex-resets "12/01 04:11, 12/02 04:51, 12/13 05:42"
+   python set_quota.py --account 1 --pool "Gemini" --weekly "82% 6d20h" --five-hour "38% 1h7m"
+
+   # 自動讀取 ~/.codex/auth.json 即時抓取 Codex Plus 5h/Weekly 並合併推播
    python push_quota.py
    ```
+   - `push_quota.py` 會自動讀取本機 `~/.codex/auth.json` 的 Bearer Token 請求 `https://chatgpt.com/backend-api/wham/usage`，取得最新 Codex `5h` / `weekly` 剩餘 % 與重設 epoch 後覆寫合併；若 Token 過期或離線則自動降級沿用 `pusher/real_quota.json` 快取。
 3. 於 ESP32 Captive Portal（或 `firmware/include/secrets.h`）設定：
    - **Quota URL**：`https://stonez56.com/codexcredit/api/quota.php`
    - **Quota Token**：同一組 `Bearer Token`
