@@ -23,7 +23,8 @@
    - 整合 `FreeSansBold` 英文粗體與專屬產生的 **20×20 微軟正黑體粗體**（`tc_font.h`），徹底解決電子紙缺字、疊字與對比度不足問題。
    - 支援 **繁體中文 (ZH) / 英文 (EN)** 一鍵即時切換。
 4. **靈活的自動輪播與護屏排程**
-   - **日間自動輪播**：日間預設每 30 秒自動換頁（Page 1 → 2 → 3 → 4）。
+   - **日間自動輪播**：日間預設每 30 秒自動換頁（Page 1 → 2 → 3 → 4 → 5）。
+   - **台股與美股即時報價（Page 5）**：單頁雙欄顯示 10 檔標的（`0050`、`006208`、`0056`、`00878`、`00919`、`2330`、`00937B`、`00719B`、加權指數、標普 500）；盤中每 **5 分鐘**更新，非交易時段自動沿用快取、不浪費網路流量。
    - **手動優先防跳頁（Hold）**：手動撥輪換頁自動暫停輪播 3 分鐘，確保閱讀不被打斷。
    - **夜間休眠護屏（Sleep）**：`00:00 ~ 07:00` 自動鎖定 Page 1，頂部標記 `SLEEP`，降頻更新以延長電子紙壽命並避免干擾睡眠。
 5. **免重燒 Wi-Fi 配置與無線 OTA 更新**
@@ -144,12 +145,14 @@ stonez56.com/codexcredit/
 ├── .htaccess          (封鎖外部直讀 config.php 與 *.json)
 ├── config.php         (機密 Token 與 data_file 路徑，不上傳 Git)
 ├── quota_data.json    (由 PHP 自動建立寫入)
+├── stocks_cache.json  (由 stocks.php 自動建立快取)
 └── api/
     ├── .htaccess      (保留 Authorization Header)
-    └── quota.php      (公開 API 端點，會自動優先讀取 ../config.php)
+    ├── quota.php      (AI 額度 API，會自動優先讀取 ../config.php)
+    └── stocks.php     (台/美股 API，會自動優先讀取 ../config.php)
 ```
 1. 在 `stonez56.com` 建立 `codexcredit/` 與 `codexcredit/api/` 兩個目錄。
-2. 將 `server/quota.php` 與 `server/.htaccess` 上傳至 `codexcredit/api/`；並在 `codexcredit/` 放置 `.htaccess` 封鎖 `config.php` 與 `*.json`（若 `codexcredit/` 位於網頁根目錄外則更佳）。
+2. 將 `server/quota.php`、`server/stocks.php` 與 `server/.htaccess` 上傳至 `codexcredit/api/`；並在 `codexcredit/` 放置 `.htaccess` 封鎖 `config.php` 與 `*.json`（若 `codexcredit/` 位於網頁根目錄外則更佳）。
 3. 複製 `server/config.example.php` 為 **`codexcredit/config.php`**（本機測試檔已由 `.gitignore` 排除，切勿提交），並填入剛剛產生的 Token：
    ```php
    <?php

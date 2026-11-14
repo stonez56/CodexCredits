@@ -15,6 +15,7 @@ struct UiContext {
   bool manualHoldActive;
   const QuotaState* quota;
   const WeatherState* weather;
+  const StockState* stocks;
 };
 
 class UiRenderer {
@@ -30,6 +31,7 @@ private:
   void drawCodexDetailPage(DisplayDriver& display, const UiContext& ctx);
   void drawGeminiDetailPage(DisplayDriver& display, const UiContext& ctx);
   void drawWeatherPage(DisplayDriver& display, const UiContext& ctx);
+  void drawStocksPage(DisplayDriver& display, const UiContext& ctx);
 
   void drawWeatherIcon(Adafruit_GFX& gfx, int cx, int cy, int r, const char* iconCode);
   void drawTextUtf8(int x, int y, const char* text);

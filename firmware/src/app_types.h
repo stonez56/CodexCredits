@@ -8,7 +8,8 @@ enum class PageId : uint8_t {
   CODEX_DETAIL = 1,
   GEMINI_DETAIL = 2,
   WEATHER_5DAY = 3,
-  PAGE_COUNT = 4
+  STOCKS = 4,
+  PAGE_COUNT = 5
 };
 
 enum class LangMode : uint8_t {
@@ -97,5 +98,23 @@ struct WeatherState {
   CurrentWeather current;
   DailyForecast days[5];
   uint8_t dayCount;
+};
+
+struct StockItem {
+  bool valid;
+  char code[10];
+  char zhName[32];
+  char enName[20];
+  uint8_t decimals;
+  float price;
+  float changePct;
+};
+
+struct StockState {
+  bool isMock;
+  bool lastSyncOk;
+  time_t lastSyncEpoch;
+  StockItem items[10];
+  uint8_t itemCount;
 };
 

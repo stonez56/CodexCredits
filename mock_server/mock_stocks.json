@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "updated_epoch": 1794645000,
+  "items": [
+    { "code": "0050",   "zh": "元大台灣50",       "en": "0050 Yuanta50",  "dec": 2, "valid": true, "price": 195.80,   "pct": 1.15 },
+    { "code": "006208", "zh": "富邦台50",         "en": "006208 Fubon50", "dec": 2, "valid": true, "price": 112.45,   "pct": 1.12 },
+    { "code": "0056",   "zh": "元大高股息",       "en": "0056 Div",       "dec": 2, "valid": true, "price": 38.42,    "pct": -0.34 },
+    { "code": "00878",  "zh": "國泰永續高股息",   "en": "00878 ESG Div",  "dec": 2, "valid": true, "price": 22.85,    "pct": 0.44 },
+    { "code": "00919",  "zh": "群益台灣精選高息", "en": "00919 HiDiv",    "dec": 2, "valid": true, "price": 24.18,    "pct": -0.16 },
+    { "code": "2330",   "zh": "台積電",           "en": "2330 TSMC",      "dec": 1, "valid": true, "price": 1055.0,   "pct": 1.93 },
+    { "code": "00937B", "zh": "群益ESG投等債20+", "en": "00937B Bond",    "dec": 2, "valid": true, "price": 15.88,    "pct": 0.25 },
+    { "code": "00719B", "zh": "元大美債1-3",      "en": "00719B UST1-3",  "dec": 2, "valid": true, "price": 31.65,    "pct": 0.06 },
+    { "code": "TWII",   "zh": "加權指數",         "en": "Tai-Index",      "dec": 0, "valid": true, "price": 22850,    "pct": 0.92 },
+    { "code": "GSPC",   "zh": "標普500",          "en": "US S&P 500",     "dec": 0, "valid": true, "price": 5985,     "pct": 0.65 }
+  ]
+}
+

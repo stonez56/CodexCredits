@@ -18,6 +18,7 @@ firmware/include/secrets.h
 config.php
 server/config.php
 server/quota_data.json
+server/stocks_cache.json
 pusher/.env
 .env
 *.env
