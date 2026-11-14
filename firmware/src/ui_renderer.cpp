@@ -30,7 +30,12 @@ namespace {
     const uint8_t* p = reinterpret_cast<const uint8_t*>(utf8);
 
     while (*p) {
-      if (*p < 0x80) {
+      if (*p == '%') {
+        gfx.setCursor(curX, yBaseline);
+        gfx.print("%");
+        curX += 13;
+        ++p;
+      } else if (*p < 0x80) {
         char ch[2] = { static_cast<char>(*p), '\0' };
         int16_t bx, by;
         uint16_t bw, bh;
@@ -156,7 +161,7 @@ void UiRenderer::drawTopBar(DisplayDriver& display, const UiContext& ctx) {
   gfx.setCursor(14, 29);
   gfx.print(timeBuf);
 
-  // 中段：城市 + 天氣圖示 + 即時氣溫與濕度
+  // 中段：城市 + 即時氣溫與濕度 + 天氣圖示 (緊湊排版防止疊字)
   const auto& city = AppConfig::CITIES[ctx.cityIndex % AppConfig::CITY_COUNT];
   char wBuf[48];
   if (ctx.weather && ctx.weather->current.valid) {
@@ -164,10 +169,11 @@ void UiRenderer::drawTopBar(DisplayDriver& display, const UiContext& ctx) {
              ctx.lang == LangMode::ZH_TW ? city.nameZh : city.nameEn,
              ctx.weather->current.tempC,
              ctx.weather->current.humidity);
-    drawMixedBold(gfx, 248, 29, wBuf);
-    drawWeatherIcon(gfx, 456, 23, 12, ctx.weather->current.icon);
+    drawMixedBold(gfx, 240, 29, wBuf);
+    // 天氣圖示緊鄰文字右側 (240 + ~160px = 405px)
+    drawWeatherIcon(gfx, 412, 23, 11, ctx.weather->current.icon);
   } else {
-    drawMixedBold(gfx, 248, 29, ctx.lang == LangMode::ZH_TW ? city.nameZh : city.nameEn);
+    drawMixedBold(gfx, 240, 29, ctx.lang == LangMode::ZH_TW ? city.nameZh : city.nameEn);
   }
 
   // 右側：狀態膠囊 + 頁碼
