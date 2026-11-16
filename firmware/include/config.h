@@ -27,7 +27,7 @@ namespace HardwarePins {
 // 顯示與排程常數
 // ============================================================================
 namespace AppConfig {
-  constexpr char APP_VERSION[]    = "v0.6.2";
+  constexpr char APP_VERSION[]    = "v0.6.3";
   constexpr uint16_t DISPLAY_WIDTH  = 792;
   constexpr uint16_t DISPLAY_HEIGHT = 272;
   constexpr uint16_t TOP_BAR_HEIGHT = 44;

@@ -20,6 +20,7 @@ server/config.php
 server/quota_data.json
 server/stocks_cache.json
 pusher/.env
+pusher/real_quota.json
 .env
 *.env
 

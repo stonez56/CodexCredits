@@ -184,16 +184,39 @@ stonez56.com/codexcredit/
 
 ### 3. 設定本機 Pusher (`pusher/`) 與 ESP32
 1. 複製 `pusher/.env.example` 為 **`pusher/.env`**（已被 `.gitignore` 排除），設定 `QUOTA_PUSH_URL=https://stonez56.com/codexcredit/api/quota.php` 與同一組 `QUOTA_API_TOKEN`。
-2. 執行推送測試（預設讀取 `mock_server/mock_quota.json` 或您的真實額度資料）：
+2. 使用 `set_quota.py` 設定 Codex 重設時間表與 Gemini Pro #1 / #2 配額（寫入已被 `.gitignore` 排除的 `pusher/real_quota.json`），並執行 `push_quota.py`（純 Python 標準庫，無須額外安裝套件）：
    ```bash
    cd pusher
-   pip install requests python-dotenv
+   # 設定 Codex 重設時間 (UTC+8) 與 Gemini Pro #1 / #2 模型池
+   python set_quota.py --codex-resets "12/01 04:11, 12/02 04:51, 12/13 05:42"
+   python set_quota.py --account 1 --pool "Gemini" --weekly "82% 6d20h" --five-hour "38% 1h7m"
+
+   # 自動讀取 ~/.codex/auth.json 即時抓取 Codex Plus 5h/Weekly 並合併推播
    python push_quota.py
    ```
+   - `push_quota.py` 會自動讀取本機 `~/.codex/auth.json` 的 Bearer Token 請求 `https://chatgpt.com/backend-api/wham/usage`，取得最新 Codex `5h` / `weekly` 剩餘 % 與重設 epoch 後覆寫合併；若 Token 過期或離線則自動降級沿用 `pusher/real_quota.json` 快取。
+   - **運作與關機說明**：
+     - **電腦開機（且有執行或排程 `push_quota.py`）時**：Codex Plus 剩餘 `%` 與倒數會持續保持最新。
+     - **電腦關機時**：**美股報價**（`stocks.php`）與**所有剩餘時間倒數**（ESP32 以 NTP 與 `expires_at_epoch` 自動推算）仍會正常更新；但 **Codex / Gemini 剩餘 `%` 數會停留在關機前最後一次推播的數值**（`stonez56.com` 僅作中繼站，不存放您的 OpenAI / Google 帳號憑證）。
 3. 於 ESP32 Captive Portal（或 `firmware/include/secrets.h`）設定：
    - **Quota URL**：`https://stonez56.com/codexcredit/api/quota.php`
    - **Quota Token**：同一組 `Bearer Token`
    - 關閉 Mock 模式（或等待正式資料寫入），即可在裝置上看見動態模型池（`Gemini Models`、`Claude & GPT`、`Gemini 4 Argon` 等）與 Codex Plus 即時倒數。
+
+### 4. 在另一台筆電（NB）安裝推播腳本
+若您在筆電（NB）上使用 Codex / Gemini，只要在 NB 完成以下步驟即可接手更新：
+1. 安裝 Python 3，並將本專案（或 `pusher/` 目錄）拉取到 NB：
+   ```bash
+   git clone https://github.com/stonez56/CodexCredits.git
+   cd CodexCredits/pusher
+   ```
+2. 從桌機複製 **`pusher/.env`** 到 NB 的 `pusher/.env`（或手動建立，填入相同的 `QUOTA_API_URL` 與 `QUOTA_API_TOKEN`）。
+3. （選用）若想保留相同的 Gemini Pro #1 / #2 與 Codex 重設排程，也可把桌機的 **`pusher/real_quota.json`** 一併複製到 NB 的 `pusher/` 目錄。
+4. 確認 NB 上已登入 Codex CLI（本機存在 `~/.codex/auth.json`），即可執行測試：
+   ```bash
+   python push_quota.py
+   ```
+5. （建議）在 NB 的 Windows **工作排程器**建立定時任務，開機時每 10～15 分鐘自動執行 `python push_quota.py`，即可無感保持最新數據。
 
 ---
 

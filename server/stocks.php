@@ -73,28 +73,43 @@ $cacheFile = $useParent
 $force = isset($_GET['force']) && $_GET['force'] === '1';
 $ttl = isAnyMarketOpen() ? CACHE_TTL_OPEN_SEC : CACHE_TTL_CLOSED_SEC;
 
-if (!$force && is_file($cacheFile)) {
-    $mtime = filemtime($cacheFile);
-    if ($mtime !== false && (time() - $mtime) < $ttl) {
-        $cached = file_get_contents($cacheFile);
-        if ($cached !== false && $cached !== '') {
-            echo $cached;
-            exit;
+$prevCacheMap = [];
+if (is_file($cacheFile)) {
+    $cached = file_get_contents($cacheFile);
+    if ($cached !== false && $cached !== '') {
+        if (!$force) {
+            $mtime = filemtime($cacheFile);
+            if ($mtime !== false && (time() - $mtime) < $ttl) {
+                echo $cached;
+                exit;
+            }
+        }
+        $decodedCache = json_decode($cached, true);
+        if (is_array($decodedCache['items'] ?? null)) {
+            foreach ($decodedCache['items'] as $item) {
+                if (!empty($item['valid']) && !empty($item['code'])) {
+                    $prevCacheMap[(string)$item['code']] = [
+                        'price' => (float)($item['price'] ?? 0),
+                        'chg'   => (float)($item['chg'] ?? 0),
+                        'pct'   => (float)($item['pct'] ?? 0),
+                    ];
+                }
+            }
         }
     }
 }
 
 $SYMBOLS = [
+    ['code' => 'TWII',   'twse' => 'tse_t00.tw',    'yahoo' => '^TWII',     'zh' => '加權指數',        'en' => 'Tai-Index',      'dec' => 0],
     ['code' => '0050',   'twse' => 'tse_0050.tw',   'yahoo' => '0050.TW',   'zh' => '元大台灣50',      'en' => '0050 Yuanta50',  'dec' => 2],
     ['code' => '006208', 'twse' => 'tse_006208.tw', 'yahoo' => '006208.TW', 'zh' => '富邦台50',        'en' => '006208 Fubon50', 'dec' => 2],
     ['code' => '0056',   'twse' => 'tse_0056.tw',   'yahoo' => '0056.TW',   'zh' => '元大高股息',      'en' => '0056 Div',       'dec' => 2],
     ['code' => '00878',  'twse' => 'tse_00878.tw',  'yahoo' => '00878.TW',  'zh' => '國泰永續高股息',  'en' => '00878 ESG Div',  'dec' => 2],
+    ['code' => 'GSPC',   'twse' => '',              'yahoo' => '^GSPC',     'zh' => '標普500',         'en' => 'US S&P 500',     'dec' => 0],
     ['code' => '00919',  'twse' => 'tse_00919.tw',  'yahoo' => '00919.TW',  'zh' => '群益台灣精選高息','en' => '00919 HiDiv',    'dec' => 2],
     ['code' => '2330',   'twse' => 'tse_2330.tw',   'yahoo' => '2330.TW',   'zh' => '台積電',          'en' => '2330 TSMC',      'dec' => 1],
     ['code' => '00937B', 'twse' => 'otc_00937B.tw', 'yahoo' => '00937B.TWO','zh' => '群益ESG投等債20+','en' => '00937B Bond',    'dec' => 2],
     ['code' => '00719B', 'twse' => 'otc_00719B.tw', 'yahoo' => '00719B.TWO','zh' => '元大美債1-3',     'en' => '00719B UST1-3',  'dec' => 2],
-    ['code' => 'TWII',   'twse' => 'tse_t00.tw',    'yahoo' => '^TWII',     'zh' => '加權指數',        'en' => 'Tai-Index',      'dec' => 0],
-    ['code' => 'GSPC',   'twse' => '',              'yahoo' => '^GSPC',     'zh' => '標普500',         'en' => 'US S&P 500',     'dec' => 0],
 ];
 
 function httpGetJson(string $url, array $headers = []): ?array {
@@ -121,6 +136,19 @@ function httpGetJson(string $url, array $headers = []): ?array {
     return is_array($decoded) ? $decoded : null;
 }
 
+function parseFirstOrderPrice(string $pipeStr): float {
+    foreach (explode('_', $pipeStr) as $part) {
+        $part = trim($part);
+        if ($part !== '' && $part !== '-' && is_numeric($part)) {
+            $val = (float)$part;
+            if ($val > 0) {
+                return $val;
+            }
+        }
+    }
+    return 0.0;
+}
+
 function fetchTwseMap(array $symbols): array {
     $exCh = [];
     foreach ($symbols as $s) {
@@ -129,34 +157,56 @@ function fetchTwseMap(array $symbols): array {
         }
     }
     if ($exCh === []) {
-        return [];
+        return ['quotes' => [], 'prev_close' => []];
     }
     $url = 'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch='
         . urlencode(implode('|', $exCh)) . '&json=1&delay=0';
     $data = httpGetJson($url, ['Referer: https://mis.twse.com.tw/stock/fibest.jsp']);
     if ($data === null || empty($data['msgArray']) || !is_array($data['msgArray'])) {
-        return [];
+        return ['quotes' => [], 'prev_close' => []];
     }
-    $map = [];
+    $quotes = [];
+    $prevClose = [];
     foreach ($data['msgArray'] as $row) {
         $c = (string)($row['c'] ?? '');
         if ($c === '') {
             continue;
         }
+        $key = ($c === 't00') ? 'TWII' : $c;
         $z = (string)($row['z'] ?? '-');
         $y = (float)($row['y'] ?? 0);
-        $price = ($z !== '-' && $z !== '' && is_numeric($z)) ? (float)$z : $y;
+        $v = (float)($row['v'] ?? 0);
+        if ($y > 0) {
+            $prevClose[$key] = ['price' => $y, 'chg' => 0.0, 'pct' => 0.0];
+        }
+
+        $price = 0.0;
+        if ($z !== '-' && $z !== '' && is_numeric($z)) {
+            $price = (float)$z;
+        } elseif ($v > 0) {
+            $bid = parseFirstOrderPrice((string)($row['b'] ?? ''));
+            $ask = parseFirstOrderPrice((string)($row['a'] ?? ''));
+            if ($bid > 0 && $ask > 0) {
+                $price = ($bid + $ask) / 2.0;
+            } elseif ($bid > 0) {
+                $price = $bid;
+            } elseif ($ask > 0) {
+                $price = $ask;
+            }
+        }
+
         if ($price <= 0) {
             continue;
         }
+        $chg = ($y > 0) ? ($price - $y) : 0.0;
         $pct = ($y > 0) ? (($price - $y) / $y) * 100.0 : 0.0;
-        $key = ($c === 't00') ? 'TWII' : $c;
-        $map[$key] = [
+        $quotes[$key] = [
             'price' => $price,
+            'chg'   => round($chg, 2),
             'pct'   => round($pct, 2),
         ];
     }
-    return $map;
+    return ['quotes' => $quotes, 'prev_close' => $prevClose];
 }
 
 function fetchYahooQuote(string $yahooSymbol): ?array {
@@ -172,20 +222,30 @@ function fetchYahooQuote(string $yahooSymbol): ?array {
     if ($price <= 0) {
         return null;
     }
+    $chg = ($prev > 0) ? ($price - $prev) : 0.0;
     $pct = ($prev > 0) ? (($price - $prev) / $prev) * 100.0 : 0.0;
     return [
         'price' => $price,
+        'chg'   => round($chg, 2),
         'pct'   => round($pct, 2),
     ];
 }
 
-$twseMap = fetchTwseMap($SYMBOLS);
+$twseRes = fetchTwseMap($SYMBOLS);
+$twseMap = $twseRes['quotes'];
+$twsePrevClose = $twseRes['prev_close'];
 $items = [];
 foreach ($SYMBOLS as $s) {
     $code = $s['code'];
     $quote = $twseMap[$code] ?? null;
     if ($quote === null) {
         $quote = fetchYahooQuote($s['yahoo']);
+    }
+    if ($quote === null) {
+        $quote = $prevCacheMap[$code] ?? null;
+    }
+    if ($quote === null) {
+        $quote = $twsePrevClose[$code] ?? null;
     }
     $items[] = [
         'code'  => $code,
@@ -194,6 +254,7 @@ foreach ($SYMBOLS as $s) {
         'dec'   => $s['dec'],
         'valid' => $quote !== null,
         'price' => $quote !== null ? round($quote['price'], $s['dec']) : 0.0,
+        'chg'   => $quote !== null ? round($quote['chg'] ?? 0.0, $s['dec']) : 0.0,
         'pct'   => $quote !== null ? $quote['pct'] : 0.0,
     ];
 }

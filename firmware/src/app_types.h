@@ -107,6 +107,7 @@ struct StockItem {
   char enName[20];
   uint8_t decimals;
   float price;
+  float changeAmt;
   float changePct;
 };
 
