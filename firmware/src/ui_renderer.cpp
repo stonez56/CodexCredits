@@ -22,44 +22,52 @@ namespace {
     return nullptr;
   }
 
-  // 混排繪製粗體 ASCII (FreeSansBold9pt) + 16x16 粗體繁體中文 (tc_font.h)
-  void drawMixedBold(Adafruit_GFX& gfx, int x, int yBaseline, const char* utf8) {
+  // 混排繪製粗體 ASCII (FreeSansBold9pt) + 20x20 粗體繁體中文 (tc_font.h)
+  int drawMixedBold(Adafruit_GFX& gfx, int x, int yBaseline, const char* utf8,
+                    uint16_t color = 1, int maxEndX = 0) {
     gfx.setFont(&FreeSansBold9pt7b);
-    gfx.setTextColor(1);
+    gfx.setTextColor(color);
     int curX = x;
     const uint8_t* p = reinterpret_cast<const uint8_t*>(utf8);
 
     while (*p) {
       if (*p == '%') {
+        if (maxEndX > 0 && curX + 16 > maxEndX) break;
         gfx.setCursor(curX, yBaseline);
         gfx.print("%");
-        curX += 13;
+        curX += 16;
         ++p;
       } else if (*p < 0x80) {
         char ch[2] = { static_cast<char>(*p), '\0' };
         int16_t bx, by;
         uint16_t bw, bh;
         gfx.getTextBounds(ch, curX, yBaseline, &bx, &by, &bw, &bh);
+        int adv = (*p == ' ') ? 5 : (static_cast<int>(bw) + 2);
+        if (maxEndX > 0 && curX + adv > maxEndX) break;
         gfx.setCursor(curX, yBaseline);
         gfx.print(ch);
-        curX += (*p == ' ') ? 5 : (static_cast<int>(bw) + 2);
+        curX += adv;
         ++p;
       } else if ((*p & 0xE0) == 0xC0 && p[1]) {
+        if (maxEndX > 0 && curX + TC_GLYPH_W > maxEndX) break;
         uint32_t cp = ((*p & 0x1F) << 6) | (p[1] & 0x3F);
         p += 2;
         const uint8_t* bm = findTcGlyph(cp);
-        if (bm) gfx.drawBitmap(curX, yBaseline - 17, bm, TC_GLYPH_W, TC_GLYPH_H, 1);
-        curX += TC_GLYPH_W + 1;
+        if (bm) gfx.drawBitmap(curX, yBaseline - 17, bm, TC_GLYPH_W, TC_GLYPH_H, color);
+        curX += TC_GLYPH_W;
       } else if ((*p & 0xF0) == 0xE0 && p[1] && p[2]) {
+        if (maxEndX > 0 && curX + TC_GLYPH_W > maxEndX) break;
         uint32_t cp = ((*p & 0x0F) << 12) | ((p[1] & 0x3F) << 6) | (p[2] & 0x3F);
         p += 3;
         const uint8_t* bm = findTcGlyph(cp);
-        if (bm) gfx.drawBitmap(curX, yBaseline - 17, bm, TC_GLYPH_W, TC_GLYPH_H, 1);
-        curX += TC_GLYPH_W + 1;
+        if (bm) gfx.drawBitmap(curX, yBaseline - 17, bm, TC_GLYPH_W, TC_GLYPH_H, color);
+        curX += TC_GLYPH_W;
       } else {
         ++p;
       }
     }
+    gfx.setTextColor(1);
+    return curX;
   }
 
   // 反白卡片標題列（黑底白字）
@@ -115,9 +123,10 @@ void UiRenderer::drawWeatherIcon(Adafruit_GFX& gfx, int cx, int cy, int r, const
                    cx + cosf(a) * r, cy + sinf(a) * r, 1);
     }
   } else if (strcmp(code, "02") == 0 || strcmp(code, "03") == 0 || strcmp(code, "04") == 0) {
-    gfx.fillCircle(cx - r / 3, cy, r / 3, 1);
-    gfx.fillCircle(cx + r / 5, cy - r / 6, r / 2.4f, 1);
-    gfx.fillRect(cx - r / 2, cy, r, r / 3, 1);
+    gfx.fillCircle(cx - r / 3, cy + 1, r * 0.42f, 1);
+    gfx.fillCircle(cx + r / 6, cy - r / 5, r * 0.48f, 1);
+    gfx.fillCircle(cx + r / 2, cy + 2, r * 0.34f, 1);
+    gfx.fillRect(cx - r / 3, cy + 1, r * 0.85f, r * 0.42f, 1);
   } else if (strcmp(code, "09") == 0 || strcmp(code, "10") == 0) {
     gfx.fillCircle(cx - r / 4, cy - r / 5, r / 3, 1);
     gfx.fillCircle(cx + r / 5, cy - r / 4, r / 2.5f, 1);
@@ -169,9 +178,9 @@ void UiRenderer::drawTopBar(DisplayDriver& display, const UiContext& ctx) {
              ctx.lang == LangMode::ZH_TW ? city.nameZh : city.nameEn,
              ctx.weather->current.tempC,
              ctx.weather->current.humidity);
-    drawMixedBold(gfx, 240, 29, wBuf);
-    // 天氣圖示緊鄰文字右側 (240 + ~160px = 405px)
-    drawWeatherIcon(gfx, 412, 23, 11, ctx.weather->current.icon);
+    int weatherEndX = drawMixedBold(gfx, 240, 29, wBuf);
+    // 天氣圖示動態緊鄰文字右側，避免英文城市名較長時與圖示重疊
+    drawWeatherIcon(gfx, weatherEndX + 20, 21, 16, ctx.weather->current.icon);
   } else {
     drawMixedBold(gfx, 240, 29, ctx.lang == LangMode::ZH_TW ? city.nameZh : city.nameEn);
   }
@@ -467,6 +476,29 @@ void UiRenderer::drawWeatherPage(DisplayDriver& display, const UiContext& ctx) {
   }
 }
 
+void drawDecimalAligned(Adafruit_GFX& gfx, const char* text, int xDot, int yBase) {
+  const char* dot = strchr(text, '.');
+  int16_t bx, by;
+  uint16_t bw, bh;
+  if (!dot) {
+    gfx.getTextBounds(text, 0, 0, &bx, &by, &bw, &bh);
+    gfx.setCursor(xDot - static_cast<int>(bw), yBase);
+    gfx.print(text);
+    return;
+  }
+  char intPart[16];
+  size_t intLen = static_cast<size_t>(dot - text);
+  if (intLen >= sizeof(intPart)) intLen = sizeof(intPart) - 1;
+  memcpy(intPart, text, intLen);
+  intPart[intLen] = '\0';
+
+  gfx.getTextBounds(intPart, 0, 0, &bx, &by, &bw, &bh);
+  gfx.setCursor(xDot - static_cast<int>(bw), yBase);
+  gfx.print(intPart);
+  gfx.setCursor(xDot, yBase);
+  gfx.print(dot);
+}
+
 void UiRenderer::drawStocksPage(DisplayDriver& display, const UiContext& ctx) {
   auto& gfx = display.gfx();
   const int bodyTop = AppConfig::TOP_BAR_HEIGHT + 2;
@@ -474,10 +506,36 @@ void UiRenderer::drawStocksPage(DisplayDriver& display, const UiContext& ctx) {
 
   gfx.fillRect(halfW - 1, bodyTop, 2, AppConfig::DISPLAY_HEIGHT - bodyTop - 2, 1);
 
-  drawCardHeader(display, 4, bodyTop, halfW - 6, 24,
-                 ctx.lang == LangMode::ZH_TW ? "台股與 ETF (1/2)" : "TW ETF & TSMC (1/2)");
-  drawCardHeader(display, halfW + 2, bodyTop, halfW - 6, 24,
-                 ctx.lang == LangMode::ZH_TW ? "債券 ETF 與指數 (2/2)" : "BOND & INDEX (2/2)");
+  const int yHdr = bodyTop + 18;
+  for (int col = 0; col < 2; ++col) {
+    const int xBar = (col == 0) ? 4 : (halfW + 2);
+    const int xCol = (col == 0) ? 10 : (halfW + 8);
+    gfx.fillRect(xBar, bodyTop, halfW - 6, 24, 1);
+    gfx.setFont(&FreeSansBold9pt7b);
+
+    if (ctx.lang == LangMode::ZH_TW) {
+      drawMixedBold(gfx, xCol, yHdr, "代號 / 名稱", 0);
+      drawMixedBold(gfx, xCol + 198, yHdr, "現價", 0);
+      drawMixedBold(gfx, xCol + 272, yHdr, "漲跌", 0);
+      drawMixedBold(gfx, xCol + 326, yHdr, "漲跌%", 0);
+    } else {
+      int16_t bx, by;
+      uint16_t bw, bh;
+      gfx.setTextColor(0);
+      gfx.setCursor(xCol, yHdr);
+      gfx.print("Symbol");
+      gfx.getTextBounds("Price", 0, 0, &bx, &by, &bw, &bh);
+      gfx.setCursor(xCol + 244 - static_cast<int>(bw), yHdr);
+      gfx.print("Price");
+      gfx.getTextBounds("Chg", 0, 0, &bx, &by, &bw, &bh);
+      gfx.setCursor(xCol + 318 - static_cast<int>(bw), yHdr);
+      gfx.print("Chg");
+      gfx.getTextBounds("Chg%", 0, 0, &bx, &by, &bw, &bh);
+      gfx.setCursor(xCol + 384 - static_cast<int>(bw), yHdr);
+      gfx.print("Chg%");
+      gfx.setTextColor(1);
+    }
+  }
 
   const StockState* st = ctx.stocks;
   if (!st || st->itemCount == 0) {
@@ -496,15 +554,18 @@ void UiRenderer::drawStocksPage(DisplayDriver& display, const UiContext& ctx) {
     const int yBase = yTop + 26;
 
     if (row < 4) {
-      gfx.drawFastHLine(xCol, yTop + rowH - 3, halfW - 20, 1);
+      gfx.drawFastHLine(xCol, yTop + rowH - 3, halfW - 18, 1);
     }
 
     if (ctx.lang == LangMode::ZH_TW) {
+      int16_t cbx, cby;
+      uint16_t cbw, cbh;
       gfx.setFont(&FreeSansBold9pt7b);
       gfx.setTextColor(1);
+      gfx.getTextBounds(it.code, 0, 0, &cbx, &cby, &cbw, &cbh);
       gfx.setCursor(xCol, yBase);
       gfx.print(it.code);
-      drawMixedBold(gfx, xCol + 66, yBase, it.zhName);
+      drawMixedBold(gfx, xCol + static_cast<int>(cbw) + 7, yBase, it.zhName, 1, xCol + 196);
     } else {
       gfx.setFont(&FreeSansBold9pt7b);
       gfx.setTextColor(1);
@@ -513,18 +574,22 @@ void UiRenderer::drawStocksPage(DisplayDriver& display, const UiContext& ctx) {
     }
 
     char priceBuf[16];
+    char chgBuf[16];
     char pctBuf[16];
     if (it.valid) {
       if (it.decimals == 0) {
         snprintf(priceBuf, sizeof(priceBuf), "%.0f", it.price);
-      } else if (it.decimals == 1) {
-        snprintf(priceBuf, sizeof(priceBuf), "%.1f", it.price);
+        snprintf(chgBuf, sizeof(chgBuf), "%+.0f", it.changeAmt);
       } else {
+        float absChg = fabsf(it.changeAmt);
+        const char* sign = (it.changeAmt >= 0.0f) ? "+" : "-";
         snprintf(priceBuf, sizeof(priceBuf), "%.2f", it.price);
+        snprintf(chgBuf, sizeof(chgBuf), "%s$%.2f", sign, absChg);
       }
       snprintf(pctBuf, sizeof(pctBuf), "%+.2f%%", it.changePct);
     } else {
       snprintf(priceBuf, sizeof(priceBuf), "--");
+      snprintf(chgBuf, sizeof(chgBuf), "--");
       snprintf(pctBuf, sizeof(pctBuf), "--");
     }
 
@@ -533,12 +598,20 @@ void UiRenderer::drawStocksPage(DisplayDriver& display, const UiContext& ctx) {
     gfx.setFont(&FreeSansBold9pt7b);
     gfx.setTextColor(1);
 
-    gfx.getTextBounds(priceBuf, 0, 0, &bx, &by, &bw, &bh);
-    gfx.setCursor(xCol + 306 - static_cast<int>(bw), yBase);
-    gfx.print(priceBuf);
+    if (it.valid) {
+      drawDecimalAligned(gfx, priceBuf, xCol + 222, yBase);
+      drawDecimalAligned(gfx, chgBuf, xCol + 296, yBase);
+    } else {
+      gfx.getTextBounds(priceBuf, 0, 0, &bx, &by, &bw, &bh);
+      gfx.setCursor(xCol + 244 - static_cast<int>(bw), yBase);
+      gfx.print(priceBuf);
+      gfx.getTextBounds(chgBuf, 0, 0, &bx, &by, &bw, &bh);
+      gfx.setCursor(xCol + 318 - static_cast<int>(bw), yBase);
+      gfx.print(chgBuf);
+    }
 
     gfx.getTextBounds(pctBuf, 0, 0, &bx, &by, &bw, &bh);
-    gfx.setCursor(xCol + 376 - static_cast<int>(bw), yBase);
+    gfx.setCursor(xCol + 384 - static_cast<int>(bw), yBase);
     gfx.print(pctBuf);
   }
 }
